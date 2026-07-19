@@ -252,6 +252,29 @@
     background: linear-gradient(180deg, #111113, #050505);
     box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
   }
+  .media-card .icon-wrap{
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    background: #0a0a0a;
+    border: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .media-card .icon{
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+  }
+  .media-card .icon-fallback{
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--silver-mid);
+  }
   .media-card .title{
     font-size: 15px;
     font-weight: 700;
@@ -618,10 +641,17 @@
 
   // Movies, TV Shows and Live TV each embed one fixed external URL.
   const CATEGORY_URLS = {
-    "Movies": "https://tuesdae.vercel.app/movies.html/",
-    "TV Shows": "https://tuesdae.vercel.app//movies.html",
+    "Movies": "https://tuesdae.vercel.app/movies.html",
+    "TV Shows": "https://tuesdae.vercel.app/movies.html",
     "Live TV": "https://www.sbs.com.au/"
   };
+
+  // Sources that need full script/window access to work (e.g. their own
+  // popup-based video player) — sandboxing is skipped for these regardless
+  // of the Popup & Redirect Blocking setting.
+  const NO_SANDBOX_URLS = [
+    "https://tuesdae.vercel.app/movies.html"
+  ];
 
   // Apps is a grid: one entry per app. Give each either a "url" (external
   // site, most common) or a "file" (an .html file living inside your local
@@ -634,7 +664,8 @@
       { title: "Prime Video",   url: "https://www.primevideo.com/" },
       { title: "Max",           url: "https://www.max.com/" },
       { title: "Apple TV",      url: "https://tv.apple.com/" },
-      { title: "Games",         url: "https://wii-eta.vercel.app/", forceRedirect: true }
+      { title: "Games",         url: "https://wii-eta.vercel.app/", forceRedirect: true },
+      { title: "Proxies",           url: "https://studyhub-science.sundby.com/" }
       // { title: "Local App", file: "appname.html" },
     ]
   };
@@ -698,6 +729,15 @@
     return "file:///" + BASE_PATH + encodeURIComponent(category) + "/" + encodeURIComponent(filename);
   }
 
+  function faviconUrl(url){
+    try{
+      const host = new URL(url).hostname;
+      return "https://www.google.com/s2/favicons?sz=128&domain=" + host;
+    }catch(e){
+      return null;
+    }
+  }
+
   function applySandboxAttr(el){
     if(blockPopups){ el.setAttribute("sandbox", SANDBOX_VALUE); }
     else { el.removeAttribute("sandbox"); }
@@ -705,8 +745,13 @@
 
   function renderEmbed(category){
     embedTitle.textContent = category;
-    applySandboxAttr(embedIframe);
-    embedIframe.src = CATEGORY_URLS[category] || "about:blank";
+    const url = CATEGORY_URLS[category] || "about:blank";
+    if(NO_SANDBOX_URLS.includes(url)){
+      embedIframe.removeAttribute("sandbox");
+    } else {
+      applySandboxAttr(embedIframe);
+    }
+    embedIframe.src = url;
   }
 
   function renderGrid(category){
@@ -726,7 +771,22 @@
     items.forEach(item=>{
       const card = document.createElement("button");
       card.className = "media-card";
-      card.innerHTML = '<div class="title"></div><div class="file"></div>';
+      card.innerHTML = '<div class="icon-wrap"><img class="icon" alt=""></div><div class="title"></div><div class="file"></div>';
+
+      const iconWrap = card.querySelector(".icon-wrap");
+      const iconImg = card.querySelector(".icon");
+      const showFallback = () => {
+        iconWrap.innerHTML = '<span class="icon-fallback"></span>';
+        iconWrap.querySelector(".icon-fallback").textContent = item.title.charAt(0).toUpperCase();
+      };
+      const favicon = item.url ? faviconUrl(item.url) : null;
+      if(favicon){
+        iconImg.onerror = showFallback;
+        iconImg.src = favicon;
+      } else {
+        showFallback();
+      }
+
       card.querySelector(".title").textContent = item.title;
       card.querySelector(".file").textContent = item.url || item.file;
       card.addEventListener("click", () => openMedia(category, item));
